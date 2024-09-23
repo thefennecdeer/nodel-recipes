@@ -181,9 +181,7 @@ sub LoadRegistry()
 	end if
 
 	if m.Registry.Exists("subscribers") then
-		print "registry subscriber list ";mVar.Registry.Read("subscribers")
-		'm.CurrentSubscribers = ParseJson(mVar.Registry.Read("subscribers")) 
-		'm.Registry.Write("subscribers", FormatJson({active:[]}))
+		m.CurrentSubscribers = ParseJson(m.Registry.Read("subscribers")) 
 		print "Subscriber List Found!"
 	else
 		m.Registry.Write("subscribers", FormatJson({active:[]}))
@@ -275,7 +273,7 @@ function DefaultsPlayer(userData as object, e as object) as boolean
 	mVar.Registry.Write("lastvolume", "100")
 	mVar.Registry.Write("powersave", "false")
 	mVar.Registry.Write("playing", "true")
-	mVar.Registry.Write("currentSubscribers", "{'active':[]}")
+	mVar.Registry.Write("subscribers", "{'active':[]}")
 	e.SetResponseBodyString("Blank")
 	e.SendResponse(200)
 end function
@@ -491,7 +489,6 @@ end function
 function Subscribe(userData as object, e as object) as boolean
 	mVar = userData.mVar
 	args = e.GetRequestParams()
-	m.CurrentSubscribers = ParseJson(mVar.Registry.Read("subscribers"))
 	tempaddress = ""
 	tempport = ""
 	for each keys in args
@@ -505,14 +502,22 @@ function Subscribe(userData as object, e as object) as boolean
 	print "address: ";tempaddress
 	print "port: ";tempport
 
-	if tempaddress <> "" and tempport <> ""
+	if tempaddress <> "" and tempport <> "" then
 		tempfull = tempaddress + ":" + tempport
 		print "full: ";tempfull
-		m.CurrentSubscribers.active = tempfull
-		print "currentS: ";tempfull
 
-		mVar.Registry.Write("subscribers", FormatJson(m.CurrentSubscribers))
-		print "final json: ";FormatJson(m.CurrentSubscribers)
+		for each keys in mVar.CurrentSubscribers.active
+			if keys = tempfull then
+				e.SetResponseBodyString("Already Subscribed!")
+				e.SendResponse(200)
+				stop
+			end if
+		end for
+		
+		mVar.CurrentSubscribers.active.push(tempfull)
+		mVar.Registry.Write("subscribers", FormatJson(mVar.CurrentSubscribers))
+		print "final json: ";FormatJson(mVar.CurrentSubscribers)
+
 		e.SetResponseBodyString("Added!")
 		e.SendResponse(200)
 	else
