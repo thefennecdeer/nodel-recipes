@@ -1,5 +1,5 @@
-' 18/09/2023
-' Nodel Control Script v1.3
+' 23/09/2024
+' Nodel Control Script v2.0
 ' Troy Takac (troy@fennecdeer.com)
 
 function Nodel_Initialize(msgPort as object, userVariables as object, bsp as object)
@@ -30,7 +30,9 @@ function newNodel(msgPort as object, userVariables as object, bsp as object)
 	s.SetVolZone = SetVolZone
 	s.RebootPlayer = RebootPlayer
 	s.DefaultsPlayer = DefaultsPlayer
-
+	
+	s.Subscribe = Subscribe
+	s.CurrentSubscribers = {}
 	s.PlaybackSingleZone = PlaybackSingleZone
 	s.SleepSingleZone = SleepSingleZone
 	s.SetVolSingleZone = SetVolSingleZone
@@ -178,6 +180,15 @@ sub LoadRegistry()
 		m.Registry.Write("currentvolume", "100")
 	end if
 
+	if m.Registry.Exists("subscribers") then
+		print "registry subscriber list ";mVar.Registry.Read("subscribers")
+		'm.CurrentSubscribers = ParseJson(mVar.Registry.Read("subscribers")) 
+		'm.Registry.Write("subscribers", FormatJson({active:[]}))
+		print "Subscriber List Found!"
+	else
+		m.Registry.Write("subscribers", FormatJson({active:[]}))
+	end if
+
 	if m.Registry.Exists("lastvolume") then
 		print "Last Volume found"
 	else
@@ -220,6 +231,7 @@ sub LoadRegistry()
 		m.Registry.Write("lastvolume", "100")
 		m.Registry.Write("powersave", "false")
 		m.Registry.Write("playing", "true")
+
 	end if
 	m.Registry.Flush()
 end sub
@@ -231,12 +243,14 @@ sub AddStatusUrls()
 	m.SetVolZoneAA = { HandleEvent: m.SetVolZone, mVar: m }
 	m.RebootPlayerAA = { HandleEvent: m.RebootPlayer, mVar: m }
 	m.DefaultsPlayerAA = { HandleEvent: m.DefaultsPlayer, mVar: m }
+	m.SubscribeAA = { HandleEvent: m.Subscribe, mVar: m }
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/status", user_data: m.GetStatusinfoAA })
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/playback", user_data: m.GetPlaybackZoneAA })
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/mute", user_data: m.GetMuteZoneAA })
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/volume", user_data: m.SetVolZoneAA })
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/reboot", user_data: m.RebootPlayerAA })
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/default", user_data: m.DefaultsPlayerAA })
+	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/subscribe", user_data: m.SubscribeAA })
 end sub
 
 function RebootPlayer(userData as object, e as object) as boolean
@@ -261,6 +275,7 @@ function DefaultsPlayer(userData as object, e as object) as boolean
 	mVar.Registry.Write("lastvolume", "100")
 	mVar.Registry.Write("powersave", "false")
 	mVar.Registry.Write("playing", "true")
+	mVar.Registry.Write("currentSubscribers", "{'active':[]}")
 	e.SetResponseBodyString("Blank")
 	e.SendResponse(200)
 end function
@@ -470,6 +485,41 @@ function GetStatusinfo(userData as object, e as object) as boolean
 	isTheHeaderAddedOK = e.AddResponseHeader("Content-type", "application/json")
 	e.SetResponseBodyString(FormatJson(out))
 	e.SendResponse(200)
+end function
+
+
+function Subscribe(userData as object, e as object) as boolean
+	mVar = userData.mVar
+	args = e.GetRequestParams()
+	m.CurrentSubscribers = ParseJson(mVar.Registry.Read("subscribers"))
+	tempaddress = ""
+	tempport = ""
+	for each keys in args
+		if lcase(keys) = "address" then
+			tempaddress = args[keys]
+		else if lcase(keys) = "port"
+			tempport = args[keys]
+		end if
+	end for
+
+	print "address: ";tempaddress
+	print "port: ";tempport
+
+	if tempaddress <> "" and tempport <> ""
+		tempfull = tempaddress + ":" + tempport
+		print "full: ";tempfull
+		m.CurrentSubscribers.active = tempfull
+		print "currentS: ";tempfull
+
+		mVar.Registry.Write("subscribers", FormatJson(m.CurrentSubscribers))
+		print "final json: ";FormatJson(m.CurrentSubscribers)
+		e.SetResponseBodyString("Added!")
+		e.SendResponse(200)
+	else
+		e.SetResponseBodyString("incorrect formatting!")
+		e.SendResponse(400)
+	end if	
+
 end function
 
 function StartTimer()

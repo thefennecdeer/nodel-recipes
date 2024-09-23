@@ -19,5 +19,5 @@ The plugin creates a local webserver on the player with endpoints tied to functi
 | /mute  | ?mute=true  | Disables audio output |
 |  | ?mute=false  | Enables audio output |
 | /volume  | ?{number between 0 and 100}  | Sets volume to number |
-| /defaults  |  | Sets player state to default, in case something gets mangled |
+| /default  |  | Sets player state to default, in case something gets mangled |
 
