@@ -507,10 +507,14 @@ function Subscribe(userData as object, e as object) as boolean
 		print "full: ";tempfull
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 		for each keys in mVar.CurrentSubscribers.active
 =======
 		for each keys in mVar.CurrentSubscribers
 >>>>>>> 524a1c1 (better handling)
+=======
+		for each keys in mVar.CurrentSubscribers.active
+>>>>>>> 3559851 (whoops)
 			if keys = tempfull then
 				e.SetResponseBodyString("Already Subscribed!")
 				e.SendResponse(200)
