@@ -32,11 +32,14 @@ function newNodel(msgPort as object, userVariables as object, bsp as object)
 	s.DefaultsPlayer = DefaultsPlayer
 	
 	s.Subscribe = Subscribe
+	s.Unsubscribe = Unsubscribe
 	s.CurrentSubscribers = {}
 	s.PlaybackSingleZone = PlaybackSingleZone
 	s.SleepSingleZone = SleepSingleZone
 	s.SetVolSingleZone = SetVolSingleZone
 	s.LoadRegistry = LoadRegistry 
+
+	s.SendUDPMessage = SendUDPMessage
 
 	s.Registry = CreateObject("roRegistrySection", "Nodel")
 	
@@ -44,7 +47,9 @@ function newNodel(msgPort as object, userVariables as object, bsp as object)
 		if type(videoMode) = "roVideoMode" then
 			s.SleepSingleZone("true", videoMode)
 		end if
-
+		
+	s.HandleMessageEventPlugin = HandleMessageEventPlugin
+	
 	s.AddStatusUrls = AddStatusUrls
 	s.HandleHTTPEventPlugin = HandleHTTPEventPlugin
 	s.nc = CreateObject("roNetworkConfiguration", 0)
@@ -112,6 +117,16 @@ function Nodel_ProcessEvent(event as object) as boolean
 				m.LoadRegistry()
 				m.FirstCheck = false
 			end if
+			msg = {}
+			msg.event = "media start"
+			print "Video Started: ";m.bsp.getvideozone(0).playbackfilename$
+			msg.file = m.bsp.getvideozone(0).playbackfilename$
+			msg.previousfile = m.bsp.getvideozone(0).previousstatename$
+			m.SendUDPMessage(FormatJson(msg), m)
+		else if event = 8 then
+			msg = {}
+			msg.event = "media start"
+			m.SendUDPMessage(FormatJson(msg), m)
 		end if
 	else if type(event) = "roTimerEvent" then
 		retval = HandleTimerEvent(event, m)
@@ -124,6 +139,7 @@ function Nodel_ProcessEvent(event as object) as boolean
 			else if event["EventType"] = "SEND_PLUGIN_MESSAGE" then
 				if event["PluginName"] = "Nodel" then
 					pluginMessage$ = event["PluginMessage"]
+					retval = HandleMessageEventPlugin(pluginMessage$, m)
 				end if
 			end if
 		end if
@@ -131,6 +147,45 @@ function Nodel_ProcessEvent(event as object) as boolean
 	return retval
 end function
 
+sub SendUDPMessage(msg as object, s as object)
+	if type(s.bsp.pluginUDPsender) <> "roDatagramSender" then
+		s.bsp.pluginUDPsender = createobject("roDatagramSender")
+	end if
+	print "here!"
+	if s.CurrentSubscribers <> invalid then
+		n = s.CurrentSubscribers.active.Count()
+		i = 0
+		print "alrighty"
+		while (i < n)
+			print "aaa"
+			r = CreateObject("roRegex", ":", "i")
+			fields=r.split(s.CurrentSubscribers.active[i])
+			s.bsp.pluginUDPsender.SetDestination(fields[0],fields[1].ToInt())
+			print "bbb"
+			mybytes=createobject("roByteArray")
+			mybytes.FromAsciiString(msg)
+			s.bsp.pluginUDPsender.Send(mybytes)
+			i = i + 1
+		end while
+	end if
+end sub
+
+function HandleMessageEventPlugin(origMsg as object, s as object) as boolean
+	msg = lcase(origMsg)
+	r = CreateObject("roRegex", "!", "i")
+	fields=r.split(msg)
+	print "message: ";msg
+	if fields <> invalid then
+		numFields = fields.count()
+		if fields[0] = "customaction" then
+			print "Custom Action!"
+			if numFields > 1 then
+				print "raw: "; fields[0] + fields[1]
+				s.SendUDPMessage("wahoo", s)
+			end if
+		end if
+	end if
+end function
 
 function HandleHTTPEventPlugin(origMsg as object, Custom as object) as boolean
 	userData = origMsg.GetUserData()
@@ -182,8 +237,12 @@ sub LoadRegistry()
 
 	if m.Registry.Exists("subscribers") then
 		m.CurrentSubscribers = ParseJson(m.Registry.Read("subscribers")) 
-		print "Subscriber List Found!"
+		if m.CurrentSubscribers = invalid then
+			m.CurrentSubscribers = {active:[]}
+		end if
+		print "Current Subscribers found"
 	else
+		m.CurrentSubscribers = {active:[]}
 		m.Registry.Write("subscribers", FormatJson({active:[]}))
 	end if
 
@@ -242,6 +301,7 @@ sub AddStatusUrls()
 	m.RebootPlayerAA = { HandleEvent: m.RebootPlayer, mVar: m }
 	m.DefaultsPlayerAA = { HandleEvent: m.DefaultsPlayer, mVar: m }
 	m.SubscribeAA = { HandleEvent: m.Subscribe, mVar: m }
+	m.UnsubscribeAA = { HandleEvent: m.Unsubscribe, mVar: m }
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/status", user_data: m.GetStatusinfoAA })
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/playback", user_data: m.GetPlaybackZoneAA })
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/mute", user_data: m.GetMuteZoneAA })
@@ -249,6 +309,7 @@ sub AddStatusUrls()
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/reboot", user_data: m.RebootPlayerAA })
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/default", user_data: m.DefaultsPlayerAA })
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/subscribe", user_data: m.SubscribeAA })
+	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/unsubscribe", user_data: m.UnsubscribeAA })
 end sub
 
 function RebootPlayer(userData as object, e as object) as boolean
@@ -480,6 +541,9 @@ function GetStatusinfo(userData as object, e as object) as boolean
 	if mVar.bsp.activePresentation <> invalid then
 		out.AddReplace("activePresentation", mVar.bsp.activePresentation$) 
 	end if
+	if mVar.CurrentSubscribers <> invalid then
+		out.AddReplace("currentSubscribers", mVar.CurrentSubscribers.active) 
+	end if
 	isTheHeaderAddedOK = e.AddResponseHeader("Content-type", "application/json")
 	e.SetResponseBodyString(FormatJson(out))
 	e.SendResponse(200)
@@ -502,23 +566,75 @@ function Subscribe(userData as object, e as object) as boolean
 	print "address: ";tempaddress
 	print "port: ";tempport
 
+
 	if tempaddress <> "" and tempport <> "" then
 		tempfull = tempaddress + ":" + tempport
 		print "full: ";tempfull
 
-		for each keys in mVar.CurrentSubscribers.active
-			if keys = tempfull then
-				e.SetResponseBodyString("Already Subscribed!")
-				e.SendResponse(200)
-				stop
-			end if
-		end for
+		if mVar.CurrentSubscribers <> invalid then
+			n = mVar.CurrentSubscribers.active.Count()
+			i = 0
+			while (i < n)
+				print "active: "; mVar.CurrentSubscribers.active[i]
+				if mVar.CurrentSubscribers.active[i] = tempfull then
+					e.SetResponseBodyString("Already Subscribed!")
+					e.SendResponse(200)
+					return false
+				end if
+				i = i + 1
+			end while
+		end if
 		
 		mVar.CurrentSubscribers.active.push(tempfull)
 		mVar.Registry.Write("subscribers", FormatJson(mVar.CurrentSubscribers))
 		print "final json: ";FormatJson(mVar.CurrentSubscribers)
 
 		e.SetResponseBodyString("Added!")
+		e.SendResponse(200)
+	else
+		e.SetResponseBodyString("incorrect formatting!")
+		e.SendResponse(400)
+	end if	
+
+end function
+
+function Unsubscribe(userData as object, e as object) as boolean
+	mVar = userData.mVar
+	args = e.GetRequestParams()
+	tempaddress = ""
+	tempport = ""
+	for each keys in args
+		if lcase(keys) = "address" then
+			tempaddress = args[keys]
+		else if lcase(keys) = "port"
+			tempport = args[keys]
+		end if
+	end for
+
+	print "address: ";tempaddress
+	print "port: ";tempport
+
+
+	if tempaddress <> "" and tempport <> "" then
+		tempfull = tempaddress + ":" + tempport
+		print "full: ";tempfull
+
+		if mVar.CurrentSubscribers <> invalid then
+			n = mVar.CurrentSubscribers.active.Count()
+			i = 0
+			while (i < n)
+				print "active: "; mVar.CurrentSubscribers.active[i]
+				if mVar.CurrentSubscribers.active[i] = tempfull then
+					mVar.CurrentSubscribers.active.Delete(i)
+					e.SetResponseBodyString("Unsubscribed!")
+					e.SendResponse(200)
+					return true
+				end if
+				i = i + 1
+			end while
+		end if
+
+		e.SetResponseBodyString("Not Currently Subscribed!")
 		e.SendResponse(200)
 	else
 		e.SetResponseBodyString("incorrect formatting!")
