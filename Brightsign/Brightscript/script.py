@@ -1,5 +1,5 @@
 '''
-**Brightsign Node** <sup>v1.4</sup> 
+**Brightsign Node** <sup>v2.0</sup> 
 
 Requires the [Nodel Brightsign Plugin](https://github.com/museumsvictoria/nodel-recipes/tree/master/Brightsign)
 
@@ -12,7 +12,7 @@ Sleep is the Brightsign's native 'Powersaving' mode, which disables all video an
 '''
 ### -------------------- SETUP -------------------- ###
 import socket
-
+import org.nodel.discovery.TopologyWatcher
 ### -------------------- PARAMETERS AND VARIABLES -------------------- ###
 
 param_playerConfig = Parameter({'title': 'Brightsign Config', 'schema': {'type': 'object', 'properties': {
@@ -21,12 +21,20 @@ param_playerConfig = Parameter({'title': 'Brightsign Config', 'schema': {'type':
            'udpPort': {'title': 'UDP Port', 'type': 'integer', 'hint': '5000', 'order': 3},
         }}})
 
+param_nodeConfig = Parameter({'title': 'Node Config', 'schema': {'type': 'object', 'properties': {
+           'ipAddress': {'title': 'Local Address Override', 'type': 'string', 'hint': '192.168.1.10', 'order': 1},
+           'udpPort': {'title': 'UDP Listen Port', 'type': 'integer', 'hint': '5000', 'order': 3},
+        }}})
+
+
 scriptPort = "8081"
 udpPort = 5000
 ipAddress = ""
 fullAddress = ""
 status_check_interval = 15
 
+udpListenPort = 0
+localIp = "0.0.0.0"
 
 ### -------------------- EVENTS -------------------- ###
 
@@ -213,6 +221,8 @@ def main(arg = None):
 
   fullAddress = "http://%s:%s" % (ipAddress, scriptPort)
   
+  localIp = org.nodel.discovery.TopologyWatcher.shared().getIPAddresses()
+
   console.log("Brightsign script started.")
 
 

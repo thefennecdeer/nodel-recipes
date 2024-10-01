@@ -68,6 +68,7 @@ function newNodel(msgPort as object, userVariables as object, bsp as object)
 	reg = CreateObject("roRegistrySection", "networking")
 	reg.write("ssh","22")
 	n=CreateObject("roNetworkConfiguration", 0)
+	print "network: ";n.GetClientIdentifier()
 	n.SetLoginPassword("nodel")
 	n.Apply()
 	reg.flush()
@@ -110,13 +111,28 @@ function Nodel_ProcessEvent(event as object) as boolean
 	if type(event) = "roHttpEvent" then
 		retval = HandleHTTPEventPlugin(event, m)
 	end if
+	if type(event) = "roStorageAttached" then
+		if m.FirstCheck = true then
+			m.LoadRegistry()
+			m.FirstCheck = false
+		end if
+	end if
+	if type(event) = "roControlDown" then
+		msg = {}
+		msg.event = "button down"
+		msg.gpio = event.GetInt()
+		m.SendUDPMessage(FormatJson(msg), m)
+	end if
+	if type(event) = "roControlUp" then
+		msg = {}
+		msg.event = "button up"
+		msg.gpio = event.GetInt()
+		m.SendUDPMessage(FormatJson(msg), m)
+	end if
 	if type(event) = "roVideoEvent" then
 		print "event: ";event
 		if event = 3 then
-			if m.FirstCheck = true then
-				m.LoadRegistry()
-				m.FirstCheck = false
-			end if
+			
 			msg = {}
 			msg.event = "media start"
 			print "Video Started: ";m.bsp.getvideozone(0).playbackfilename$
@@ -125,7 +141,8 @@ function Nodel_ProcessEvent(event as object) as boolean
 			m.SendUDPMessage(FormatJson(msg), m)
 		else if event = 8 then
 			msg = {}
-			msg.event = "media start"
+			msg.event = "media ended"
+			msg.file = m.bsp.getvideozone(0).playbackfilename$
 			m.SendUDPMessage(FormatJson(msg), m)
 		end if
 	else if type(event) = "roTimerEvent" then
@@ -151,22 +168,20 @@ sub SendUDPMessage(msg as object, s as object)
 	if type(s.bsp.pluginUDPsender) <> "roDatagramSender" then
 		s.bsp.pluginUDPsender = createobject("roDatagramSender")
 	end if
-	print "here!"
 	if s.CurrentSubscribers <> invalid then
-		n = s.CurrentSubscribers.active.Count()
-		i = 0
-		print "alrighty"
-		while (i < n)
-			print "aaa"
-			r = CreateObject("roRegex", ":", "i")
-			fields=r.split(s.CurrentSubscribers.active[i])
-			s.bsp.pluginUDPsender.SetDestination(fields[0],fields[1].ToInt())
-			print "bbb"
-			mybytes=createobject("roByteArray")
-			mybytes.FromAsciiString(msg)
-			s.bsp.pluginUDPsender.Send(mybytes)
-			i = i + 1
-		end while
+		if s.CurrentSubscribers.active <> invalid then
+			n = s.CurrentSubscribers.active.count()
+			i = 0
+			while (i < n)
+				r = CreateObject("roRegex", ":", "i")
+				fields=r.split(s.CurrentSubscribers.active[i])
+				s.bsp.pluginUDPsender.SetDestination(fields[0],fields[1].ToInt())
+				mybytes=createobject("roByteArray")
+				mybytes.FromAsciiString(msg)
+				s.bsp.pluginUDPsender.Send(mybytes)
+				i = i + 1
+			end while
+		end if
 	end if
 end sub
 
@@ -174,14 +189,24 @@ function HandleMessageEventPlugin(origMsg as object, s as object) as boolean
 	msg = lcase(origMsg)
 	r = CreateObject("roRegex", "!", "i")
 	fields=r.split(msg)
-	print "message: ";msg
 	if fields <> invalid then
 		numFields = fields.count()
 		if fields[0] = "customaction" then
-			print "Custom Action!"
+			newmsg = {}
 			if numFields > 1 then
-				print "raw: "; fields[0] + fields[1]
-				s.SendUDPMessage("wahoo", s)
+				' Do we have arguments? 
+				r2 = CreateObject("roRegex", "&", "i")
+				fields2=r2.split(fields[1])
+				numFields2 = fields2.count()
+				if numFields > 1 then
+					newmsg.arg = fields2[1]
+					newmsg.event = fields2[0]
+					s.SendUDPMessage(FormatJson(newmsg), s)
+				else
+				' we dont have arguments
+					newmsg.event = fields[1]
+					s.SendUDPMessage(FormatJson(newmsg), s)
+				end if
 			end if
 		end if
 	end if
