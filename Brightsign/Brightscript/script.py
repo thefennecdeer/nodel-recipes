@@ -36,6 +36,7 @@ status_check_interval = 15
 udpListenPort = 0
 localIp = "0.0.0.0"
 
+
 ### -------------------- EVENTS -------------------- ###
 
 local_event_Power = LocalEvent({'group': 'Power', 'schema': {'type': 'string', 'enum': ['On', 'Off']},
@@ -136,6 +137,18 @@ def GetStatus():
 
 ### -------------------- MAIN FUNCTIONS -------------------- ###
 
+def udp_ready():
+  console.info('Yeah')
+  
+def receive_udp_string(source, data):
+  msg = str(data)
+  manifest_event(msg.strip())
+  console.info('Recv: %s' % msg)
+  
+def send_udp_string(msg):
+  console.info('Sent: %s' % msg)
+  transmit.emit(msg)
+
 def sendGet(value):
   global fullAddress
   try: 
@@ -208,9 +221,21 @@ def playerStatusGet():
         if lookup_local_event('DesiredMute').getArg() == "On":
           lookup_local_action("Mute").call("On")
 
+def subscribe():
+  global ipAddress, scriptPort, udpPort, fullAddress, localIp
+  udpListenPort = udp.getListeningPort()
+  console.log(udpListenPort)
+  request = "%s/subscribe?address=%s&port=%s" % (fullAddress, localIp, udpListenPort)
+
+udp = UDP(source = None,
+          dest = None,
+          ready=udp_ready,
+          received=receive_udp_string,
+          sent=lambda message: console.info('Sent: %s' % message) )
+
 # Script Entrypoint
 def main(arg = None):
-  global ipAddress, scriptPort, udpPort, fullAddress
+  global ipAddress, scriptPort, udpPort, fullAddress, localIp, udpListenPort
   if is_blank((param_playerConfig or {}).get('ipAddress')):
     console.error('No Address has been specified, nothing to do!')
     return
@@ -220,9 +245,11 @@ def main(arg = None):
   udpPort = (param_playerConfig or {}).get('udpPort') or udpPort
 
   fullAddress = "http://%s:%s" % (ipAddress, scriptPort)
-  
-  localIp = org.nodel.discovery.TopologyWatcher.shared().getIPAddresses()
 
+  #localIp = org.nodel.discovery.TopologyWatcher.shared().getIPAddresses()
+
+  udp.source = socket.gethostbyname(socket.gethostname()) + ':' + '0'
+  
   console.log("Brightsign script started.")
 
 
