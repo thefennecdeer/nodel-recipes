@@ -12,7 +12,6 @@ Sleep is the Brightsign's native 'Powersaving' mode, which disables all video an
 '''
 ### -------------------- SETUP -------------------- ###
 import socket
-import org.nodel.discovery.TopologyWatcher
 ### -------------------- PARAMETERS AND VARIABLES -------------------- ###
 
 param_playerConfig = Parameter({'title': 'Brightsign Config', 'schema': {'type': 'object', 'properties': {
@@ -64,7 +63,9 @@ local_event_DesiredPlayback = LocalEvent({'group': 'Playback', 'order': next_seq
 local_event_DesiredMute = LocalEvent({'group': 'Volume', 'order': next_seq(),'schema': {'type': 'string', 'enum': ['On', 'Off']},
                                 'desc': 'Desired Mute State'})  
 # Brightsign/>
-
+# <Networking
+local_event_UDPListenPort = LocalEvent({'group': 'Networking','order': next_seq(), 'schema': { 'type': 'string' }})
+# Networking/>
 
 ### -------------------- ACTIONS -------------------- ###
 
@@ -223,8 +224,9 @@ def playerStatusGet():
 
 def subscribe():
   global ipAddress, scriptPort, udpPort, fullAddress, localIp
-  udpListenPort = udp.getListeningPort()
+  udpListenPort = str(udp.getListeningPort())
   console.log(udpListenPort)
+  lookup_local_event("UDPListenPort").emit(udpListenPort)
   request = "%s/subscribe?address=%s&port=%s" % (fullAddress, localIp, udpListenPort)
 
 udp = UDP(source = None,
@@ -246,9 +248,14 @@ def main(arg = None):
 
   fullAddress = "http://%s:%s" % (ipAddress, scriptPort)
 
+  old_port = local_event_UDPListenPort.getArg()
+  if len(old_port or '') == 0:
+    console.info("Grabbing new available port!")
+    old_port = '0'
+
   #localIp = org.nodel.discovery.TopologyWatcher.shared().getIPAddresses()
 
-  udp.source = socket.gethostbyname(socket.gethostname()) + ':' + '0'
+  udp.source = socket.gethostbyname(socket.gethostname()) + ':' + old_port
   
   console.log("Brightsign script started.")
 
