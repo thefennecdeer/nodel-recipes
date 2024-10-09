@@ -12,17 +12,20 @@ Sleep is the Brightsign's native 'Powersaving' mode, which disables all video an
 '''
 ### -------------------- SETUP -------------------- ###
 import socket
+from inputHandler import *
 ### -------------------- PARAMETERS AND VARIABLES -------------------- ###
 
-param_playerConfig = Parameter({'title': 'Brightsign Config', 'schema': {'type': 'object', 'properties': {
-           'ipAddress': {'title': 'IP Address', 'type': 'string', 'hint': '192.168.1.10', 'order': 1},
-           'scriptPort': {'title': 'Script Port', 'type': 'string', 'hint': '8081', 'order': 2},
-           'udpPort': {'title': 'UDP Port', 'type': 'integer', 'hint': '5000', 'order': 3},
-        }}})
+param_playerIP = Parameter({'title': 'Brightsign IP Address', 'order': next_seq(), 'schema': {'type': 'string', 'hint': '192.168.1.10'}})
 
-param_nodeConfig = Parameter({'title': 'Node Config', 'schema': {'type': 'object', 'properties': {
-           'ipAddress': {'title': 'Local Address Override', 'type': 'string', 'hint': '192.168.1.10', 'order': 1},
-           'udpPort': {'title': 'UDP Listen Port', 'type': 'integer', 'hint': '5000', 'order': 3},
+param_overrides = Parameter({'title': 'Overrides', 'order': next_seq(), 'schema': {'type': 'object', 'properties': {
+           'playerOverride': {'title': 'Brightsign Overrides', 'type': 'object', 'order': 1, 'properties': {
+              'scriptPort': {'title': 'Script Port', 'type': 'string', 'hint': '8081', 'order': 1},
+              'udpPort': {'title': 'UDP Port', 'type': 'integer', 'hint': '5000', 'order': 2}
+            }},
+           'nodeOverride': {'title': 'Node Overrides', 'type': 'object', 'order': 2, 'properties': {
+              'ipAddress': {'title': "Node's UDP Listen Port", 'type': 'string', 'hint': '192.168.1.10', 'order': 1},
+              'udpPort': {'title': "Node's UDP Listen Port", 'type': 'integer', 'hint': '5000', 'order': 3}
+            }}
         }}})
 
 
@@ -33,8 +36,8 @@ fullAddress = ""
 status_check_interval = 15
 
 udpListenPort = 0
-localIp = "0.0.0.0"
-
+udpListenAddress = "0.0.0.0"
+udpListenReady = False
 
 ### -------------------- EVENTS -------------------- ###
 
@@ -43,7 +46,10 @@ local_event_Power = LocalEvent({'group': 'Power', 'schema': {'type': 'string', '
 local_event_DesiredPower = LocalEvent({'group': 'Power', 'schema': {'type': 'string', 'enum': ['On', 'Off']},
                                 'desc': 'Desired Power State'})
 # <Brightsign
+
 local_event_Model = LocalEvent({'order': next_seq(), 'schema': { 'type': 'string' }})
+
+local_event_CurrentClip = LocalEvent({'title':'Current Clip', 'order': next_seq(), 'schema': { 'type': 'string' }})
                                 
 local_event_Serial = LocalEvent({'order': next_seq(), 'schema': { 'type': 'string' }})
                                 
@@ -137,15 +143,13 @@ def GetStatus():
   playerStatusGet()
 
 ### -------------------- MAIN FUNCTIONS -------------------- ###
-
-def udp_ready():
-  console.info('Yeah')
   
-def receive_udp_string(source, data):
-  msg = str(data)
-  manifest_event(msg.strip())
-  console.info('Recv: %s' % msg)
-  
+def recv_handler(source, data):
+  json = json_decode(data)
+  console.log(json)
+  if "button" in json["event"]:
+    handlePress(json)
+    
 def send_udp_string(msg):
   console.info('Sent: %s' % msg)
   transmit.emit(msg)
@@ -223,28 +227,42 @@ def playerStatusGet():
           lookup_local_action("Mute").call("On")
 
 def subscribe():
-  global ipAddress, scriptPort, udpPort, fullAddress, localIp
+  global udpListenPort, udpListenAddress, udpListenReady
+  if udpListenReady:
+    sendGet("/subscribe?address=%s&port=%s" % (udpListenAddress, udpListenPort))
+
+
+def udp_ready():
+  global udpListenReady
+  udpListenReady = True
+  console.info('Yeah')
+  grabUDPListenDetails()
+
+def grabUDPListenDetails():
+  global udpListenAddress, udpListenPort
+  udpListenAddress = socket.gethostbyname(socket.gethostname())
   udpListenPort = str(udp.getListeningPort())
   console.log(udpListenPort)
   lookup_local_event("UDPListenPort").emit(udpListenPort)
-  request = "%s/subscribe?address=%s&port=%s" % (fullAddress, localIp, udpListenPort)
 
 udp = UDP(source = None,
           dest = None,
           ready=udp_ready,
-          received=receive_udp_string,
+          received=recv_handler,
           sent=lambda message: console.info('Sent: %s' % message) )
 
 # Script Entrypoint
 def main(arg = None):
-  global ipAddress, scriptPort, udpPort, fullAddress, localIp, udpListenPort
-  if is_blank((param_playerConfig or {}).get('ipAddress')):
+  global ipAddress, scriptPort, udpPort, fullAddress, udpListenAddress, udpListenPort
+  if is_blank(param_playerIP):
     console.error('No Address has been specified, nothing to do!')
     return
   else:
-    ipAddress = (param_playerConfig or {}).get('ipAddress')
-  scriptPort = (param_playerConfig or {}).get('scriptPort') or scriptPort
-  udpPort = (param_playerConfig or {}).get('udpPort') or udpPort
+    ipAddress = param_playerIP
+
+  playerOverrides = (param_overrides or {}).get('playerOverride')
+  scriptPort = (playerOverrides or {}).get('scriptPort') or scriptPort
+  udpPort = (playerOverrides or {}).get('udpPort') or udpPort
 
   fullAddress = "http://%s:%s" % (ipAddress, scriptPort)
 
@@ -253,10 +271,8 @@ def main(arg = None):
     console.info("Grabbing new available port!")
     old_port = '0'
 
-  #localIp = org.nodel.discovery.TopologyWatcher.shared().getIPAddresses()
-
   udp.source = socket.gethostbyname(socket.gethostname()) + ':' + old_port
-  
+
   console.log("Brightsign script started.")
 
 
@@ -411,6 +427,5 @@ def decodeArgList(argsString):
       argsList.append(''.join(currentArg))
 
   return argsList
-
 
 # convenience --->
