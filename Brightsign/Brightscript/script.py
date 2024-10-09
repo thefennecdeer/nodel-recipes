@@ -47,15 +47,15 @@ local_event_DesiredPower = LocalEvent({'group': 'Power', 'schema': {'type': 'str
                                 'desc': 'Desired Power State'})
 # <Brightsign
 
-local_event_Model = LocalEvent({'order': next_seq(), 'schema': { 'type': 'string' }})
-
 local_event_CurrentClip = LocalEvent({'title':'Current Clip', 'order': next_seq(), 'schema': { 'type': 'string' }})
-                                
+
 local_event_Serial = LocalEvent({'order': next_seq(), 'schema': { 'type': 'string' }})
                                 
-local_event_VideoMode = LocalEvent({'order': next_seq(), 'schema': { 'type': 'string' }})
-                                
 local_event_Volume = LocalEvent({'order': next_seq(), 'schema': { 'type': 'string' }})
+                                
+local_event_Model = LocalEvent({'order': next_seq(), 'schema': { 'type': 'string' }})
+                                
+local_event_VideoMode = LocalEvent({'group': 'Playback', 'order': next_seq(), 'schema': { 'type': 'string' }})
                                 
 local_event_Mute = LocalEvent({'group': 'Volume', 'order': next_seq(),'schema': {'type': 'string', 'enum': ['On', 'Off']},
                                 'desc': 'Mute State'})
@@ -146,10 +146,12 @@ def GetStatus():
   
 def recv_handler(source, data):
   json = json_decode(data)
-  console.log(json)
+  #console.log(json)
   if "button" in json["event"]:
     handlePress(json)
-    
+  if "media start" in json["event"]:
+    local_event_CurrentClip.emit(json["file"])
+
 def send_udp_string(msg):
   console.info('Sent: %s' % msg)
   transmit.emit(msg)
@@ -231,12 +233,12 @@ def subscribe():
   if udpListenReady:
     sendGet("/subscribe?address=%s&port=%s" % (udpListenAddress, udpListenPort))
 
-
 def udp_ready():
   global udpListenReady
   udpListenReady = True
   console.info('Yeah')
   grabUDPListenDetails()
+  subscribe()
 
 def grabUDPListenDetails():
   global udpListenAddress, udpListenPort
@@ -329,7 +331,7 @@ nodeStatus_timer = Timer(nodeStatusCheck, status_check_interval)
 
 # <!-- logging
 
-local_event_LogLevel = LocalEvent({'group': 'Debug', 'order': 10000+next_seq(), 'desc': 'Use this to ramp up the logging (with indentation)',  
+local_event_LogLevel = LocalEvent({'group': 'Debug', 'order': 10000, 'desc': 'Use this to ramp up the logging (with indentation)',  
                                    'schema': {'type': 'integer'}})
 
 def warn(level, msg):

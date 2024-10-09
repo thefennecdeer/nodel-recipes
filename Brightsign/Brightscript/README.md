@@ -20,4 +20,8 @@ The plugin creates a local webserver on the player with endpoints tied to functi
 |  | ?mute=false  | Enables audio output |
 | /volume  | ?{number between 0 and 100}  | Sets volume to number |
 | /default  |  | Sets player state to default, in case something gets mangled |
+| /subscribe  | ?address={ADDRESS}&port={PORT}  | Subscribe an IP and Port to the Brightsign Player's events |
+| /unsubscribe  | ?playback=play  | Unsubscribe an IP and Port to the Brightsign Player's events |
+
+
 

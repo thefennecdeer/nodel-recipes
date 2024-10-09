@@ -68,6 +68,10 @@ function newNodel(msgPort as object, userVariables as object, bsp as object)
 	reg = CreateObject("roRegistrySection", "networking")
 	reg.write("ssh","22")
 	n=CreateObject("roNetworkConfiguration", 0)
+	if n.GetClientIdentifier() <> "" then
+		n.SetClientIdentifier("")
+		RebootSystem()
+	end if
 	print "network: ";n.GetClientIdentifier()
 	n.SetLoginPassword("nodel")
 	n.Apply()
@@ -146,6 +150,7 @@ function Nodel_ProcessEvent(event as object) as boolean
 			m.SendUDPMessage(FormatJson(msg), m)
 		end if
 	else if type(event) = "roTimerEvent" then
+		print "timer event: "event;
 		retval = HandleTimerEvent(event, m)
 	else if type(event) = "roAssociativeArray" then
 		if type(event["EventType"]) = "roString"
@@ -563,12 +568,20 @@ function GetStatusinfo(userData as object, e as object) as boolean
 	out.AddReplace("videomode", mVar.bsp.sign.videomode$)
 	out.AddReplace("volume", mVar.Registry.Read("currentvolume"))
 	out.AddReplace("muted", mVar.Registry.Read("muted"))
-	if mVar.bsp.activePresentation <> invalid then
-		out.AddReplace("activePresentation", mVar.bsp.activePresentation$) 
+	playlistTemp = []
+	if mVar.bsp.getvideozone(0) <> invalid then
+		for each keys in mVar.bsp.getvideozone(0).stateTable
+			playlistTemp.push(keys)
+		end for
+		out.AddReplace("playlist", playlistTemp)
 	end if
 	if mVar.CurrentSubscribers <> invalid then
 		out.AddReplace("currentSubscribers", mVar.CurrentSubscribers.active) 
 	end if
+	if mVar.bsp.activePresentation <> invalid then
+		out.AddReplace("activePresentation", mVar.bsp.activePresentation$) 
+	end if
+	
 	isTheHeaderAddedOK = e.AddResponseHeader("Content-type", "application/json")
 	e.SetResponseBodyString(FormatJson(out))
 	e.SendResponse(200)
