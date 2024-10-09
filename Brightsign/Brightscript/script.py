@@ -66,9 +66,13 @@ local_event_Playback = LocalEvent({'group': 'Playback', 'order': next_seq(),'sch
 local_event_DesiredPlayback = LocalEvent({'group': 'Playback', 'order': next_seq(),'schema': {'type': 'string'},
                                 'desc': 'Desired Playback State'})
 
+local_event_Playlist = LocalEvent({'group': 'Playlist', 'order': next_seq(),'schema': {'type': 'object', 'properties': {
+                                      'name': {'type': 'string', 'order': 1}}}})
+
 local_event_DesiredMute = LocalEvent({'group': 'Volume', 'order': next_seq(),'schema': {'type': 'string', 'enum': ['On', 'Off']},
                                 'desc': 'Desired Mute State'})  
 # Brightsign/>
+
 # <Networking
 local_event_UDPListenPort = LocalEvent({'group': 'Networking','order': next_seq(), 'schema': { 'type': 'string' }})
 # Networking/>
@@ -95,12 +99,12 @@ def Sleep(arg = None):
 # Power/>
 
 # <Playback
-@local_action({'group': 'Playback', 'title': 'Play', 'order': next_seq()})  
+@local_action({'group': 'Playback', 'title': 'Play', 'order': 1})  
 def Play(arg = None):
   lookup_local_event('DesiredPlayback').emit("Playing")
   sendGet("/playback?playback=play")
 
-@local_action({'group': 'Playback', 'title': 'Pause', 'order': next_seq()})  
+@local_action({'group': 'Playback', 'title': 'Pause', 'order': 2})  
 def Pause(arg = None):
   lookup_local_event('DesiredPlayback').emit("Paused")
   sendGet("/playback?playback=pause")
@@ -200,6 +204,12 @@ def playerStatusGet():
       lookup_local_event('VideoMode').emit(status_decode['videomode'])
       lookup_local_event('volume').emit(status_decode['volume'])
 
+      if status_decode['playlist'] == "true":
+        playlist = list()
+        for item in status_decode['playlist']:
+          playlist.append({'name': item})
+        lookup_local_event('Playlist').emit(playlist)
+
       if status_decode['sleep'] == "true":
         lookup_local_event('Power').emit('Off')
         if lookup_local_event('DesiredPower').getArg() == "On":
@@ -208,7 +218,6 @@ def playerStatusGet():
         lookup_local_event('Power').emit('On')
         if lookup_local_event('DesiredPower').getArg() == "Off":
           lookup_local_action("Wake").call()
-      
 
       if status_decode['playing'] == "true" :
         lookup_local_event('Playback').emit('Playing')
@@ -236,7 +245,6 @@ def subscribe():
 def udp_ready():
   global udpListenReady
   udpListenReady = True
-  console.info('Yeah')
   grabUDPListenDetails()
   subscribe()
 
@@ -244,8 +252,8 @@ def grabUDPListenDetails():
   global udpListenAddress, udpListenPort
   udpListenAddress = socket.gethostbyname(socket.gethostname())
   udpListenPort = str(udp.getListeningPort())
-  console.log(udpListenPort)
   lookup_local_event("UDPListenPort").emit(udpListenPort)
+  console.info('UDP Ready, listening on port %s!' % udpListenPort)
 
 udp = UDP(source = None,
           dest = None,
