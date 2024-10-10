@@ -1,5 +1,5 @@
 '''
-**Brightsign Node** <sup>v2.0</sup> 
+**Brightsign Node** <sup>v2.1</sup> 
 
 Requires the [Nodel Brightsign Plugin](https://github.com/museumsvictoria/nodel-recipes/tree/master/Brightsign)
 
@@ -152,10 +152,23 @@ def GetStatus():
 def recv_handler(source, data):
   json = json_decode(data)
   #console.log(json)
+  if "customaction" in json["event"]:
+    emit_custom_event(json)
   if "button" in json["event"]:
     handlePress(json)
   if "media start" in json["event"]:
     local_event_CurrentClip.emit(json["file"])
+
+def emit_custom_event(json):
+  event = lookup_local_event("Show %s" % json["name"])
+  if event == None:
+    create_local_event('Show %s' % json["name"], {'group': 'Show Events', 'order': next_seq(), 'schema': {'type': 'string'}}) 
+
+  if json["arg"]:
+    event.emit(json["arg"])
+  else:
+    event.emit()
+  
 
 def send_udp_string(msg):
   console.info('Sent: %s' % msg)
