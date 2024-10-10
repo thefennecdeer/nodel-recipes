@@ -68,10 +68,7 @@ function newNodel(msgPort as object, userVariables as object, bsp as object)
 	reg = CreateObject("roRegistrySection", "networking")
 	reg.write("ssh","22")
 	n=CreateObject("roNetworkConfiguration", 0)
-	if n.GetClientIdentifier() <> "" then
-		n.SetClientIdentifier("")
-		RebootSystem()
-	end if
+	
 	print "network: ";n.GetClientIdentifier()
 	n.SetLoginPassword("nodel")
 	n.Apply()
