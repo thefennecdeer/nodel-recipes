@@ -201,12 +201,14 @@ function HandleMessageEventPlugin(origMsg as object, s as object) as boolean
 				fields2=r2.split(fields[1])
 				numFields2 = fields2.count()
 				if numFields > 1 then
+					newmsg.name = fields2[0]
 					newmsg.arg = fields2[1]
-					newmsg.event = fields2[0]
+					newmsg.event = fields[0]
 					s.SendUDPMessage(FormatJson(newmsg), s)
 				else
 				' we dont have arguments
-					newmsg.event = fields[1]
+					newmsg.name = fields[1]
+					newmsg.event = fields[0]
 					s.SendUDPMessage(FormatJson(newmsg), s)
 				end if
 			end if
