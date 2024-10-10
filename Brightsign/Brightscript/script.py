@@ -12,6 +12,7 @@ Sleep is the Brightsign's native 'Powersaving' mode, which disables all video an
 '''
 ### -------------------- SETUP -------------------- ###
 import socket
+import org.nodel.discovery.TopologyWatcher
 from inputHandler import *
 ### -------------------- PARAMETERS AND VARIABLES -------------------- ###
 
@@ -35,8 +36,8 @@ ipAddress = ""
 fullAddress = ""
 status_check_interval = 15
 
-udpListenPort = 0
-udpListenAddress = "0.0.0.0"
+udpListenPort = ""
+udpListenAddress = ""
 udpListenReady = False
 
 ### -------------------- EVENTS -------------------- ###
@@ -249,8 +250,7 @@ def udp_ready():
   subscribe()
 
 def grabUDPListenDetails():
-  global udpListenAddress, udpListenPort
-  udpListenAddress = socket.gethostbyname(socket.gethostname())
+  global udpListenPort
   udpListenPort = str(udp.getListeningPort())
   lookup_local_event("UDPListenPort").emit(udpListenPort)
   console.info('UDP Ready, listening on port %s!' % udpListenPort)
@@ -271,17 +271,27 @@ def main(arg = None):
     ipAddress = param_playerIP
 
   playerOverrides = (param_overrides or {}).get('playerOverride')
+  nodeOverrides = (param_overrides or {}).get('nodeOverride')
   scriptPort = (playerOverrides or {}).get('scriptPort') or scriptPort
   udpPort = (playerOverrides or {}).get('udpPort') or udpPort
+
+  udpListenAddress = (playerOverrides or {}).get('ipAddress') or udpListenAddress
+  udpListenPort = (playerOverrides or {}).get('udpPort') or udpListenPort
 
   fullAddress = "http://%s:%s" % (ipAddress, scriptPort)
 
   old_port = local_event_UDPListenPort.getArg()
   if len(old_port or '') == 0:
-    console.info("Grabbing new available port!")
-    old_port = '0'
+    if len(udpListenPort or '') != 0:
+      old_port = udpListenPort
+    else:
+      console.info("Grabbing new available port!")
+      old_port = '0'
 
-  udp.source = socket.gethostbyname(socket.gethostname()) + ':' + old_port
+  if len(udpListenAddress or '') == 0:
+    udpListenAddress = org.nodel.discovery.TopologyWatcher.shared().getIPAddresses()[0]
+    
+  udp.source = udpListenAddress + ':' + old_port
 
   console.log("Brightsign script started.")
 
