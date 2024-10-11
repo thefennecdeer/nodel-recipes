@@ -160,10 +160,11 @@ def recv_handler(source, data):
     local_event_CurrentClip.emit(json["file"])
 
 def emit_custom_event(json):
-  event = lookup_local_event("Show %s" % json["name"])
-  if event == None:
-    create_local_event('Show %s' % json["name"], {'group': 'Show Events', 'order': next_seq(), 'schema': {'type': 'string'}}) 
+  precheck = lookup_local_event("custom_%s" % json["name"])
+  if precheck == None:
+    create_local_event('custom_%s' % json["name"], {'title': 'custom %s' % json["name"], 'group': 'Show Events', 'order': next_seq(), 'schema': {'type': 'string'}}) 
 
+  event = lookup_local_event("custom_%s" % json["name"])
   if json["arg"]:
     event.emit(json["arg"])
   else:
