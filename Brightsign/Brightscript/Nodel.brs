@@ -26,20 +26,22 @@ function newNodel(msgPort as object, userVariables as object, bsp as object)
 
 	s.GetStatusinfo = GetStatusinfo
 	s.PlaybackZone = PlaybackZone
-	s.MuteZone = MuteZone
-	s.SetVolZone = SetVolZone
+	s.SetMuteConnectorHandler = SetMuteConnectorHandler
+	s.SetMuteConnector = SetMuteConnector
+	s.SetVolConnectorHandler = SetVolConnectorHandler
+	s.SetVolConnector = SetVolConnector
 	s.RebootPlayer = RebootPlayer
 	s.DefaultsPlayer = DefaultsPlayer
 	
 	s.Subscribe = Subscribe
 	s.Unsubscribe = Unsubscribe
-	s.CurrentSubscribers = {}
+	s.CurrentSubscribers = []
 	s.PlaybackSingleZone = PlaybackSingleZone
 	s.SleepSingleZone = SleepSingleZone
-	s.SetVolSingleZone = SetVolSingleZone
-	s.LoadRegistry = LoadRegistry 
+	s.LoadRegistry = LoadRegistry
 
 	s.SendUDPMessage = SendUDPMessage
+	s.AudioConnectors = ["analog", "hdmi", "hdmi1", "hdmi2", "hdmi3", "hdmi4", "spdif"]
 
 	s.Registry = CreateObject("roRegistrySection", "Nodel")
 	
@@ -171,19 +173,19 @@ sub SendUDPMessage(msg as object, s as object)
 		s.bsp.pluginUDPsender = createobject("roDatagramSender")
 	end if
 	if s.CurrentSubscribers <> invalid then
-		if s.CurrentSubscribers.active <> invalid then
-			n = s.CurrentSubscribers.active.count()
-			i = 0
-			while (i < n)
-				r = CreateObject("roRegex", ":", "i")
-				fields=r.split(s.CurrentSubscribers.active[i])
-				s.bsp.pluginUDPsender.SetDestination(fields[0],fields[1].ToInt())
-				mybytes=createobject("roByteArray")
-				mybytes.FromAsciiString(msg)
-				s.bsp.pluginUDPsender.Send(mybytes)
-				i = i + 1
-			end while
-		end if
+		
+		n = s.CurrentSubscribers.Count()
+		i = 0
+		while (i < n)
+			r = CreateObject("roRegex", ":", "i")
+			fields=r.split(s.CurrentSubscribers[i])
+			s.bsp.pluginUDPsender.SetDestination(fields[0],fields[1].ToInt())
+			mybytes=createobject("roByteArray")
+			mybytes.FromAsciiString(msg)
+			s.bsp.pluginUDPsender.Send(mybytes)
+			i = i + 1
+		end while
+		
 	end if
 end sub
 
@@ -215,6 +217,8 @@ function HandleMessageEventPlugin(origMsg as object, s as object) as boolean
 		end if
 	end if
 end function
+
+
 
 function HandleHTTPEventPlugin(origMsg as object, Custom as object) as boolean
 	userData = origMsg.GetUserData()
@@ -258,63 +262,24 @@ sub LoadRegistry()
 		m.Registry.Write("playing", "true")
 	end if
 
-	if m.Registry.Exists("currentvolume") then
-		print "Current Volume found"
+	if m.Registry.Exists("volume") then
+		print "Volume found"
 	else
-		m.Registry.Write("currentvolume", "100")
+		m.Registry.Write("volume", "100")
 	end if
 
-	if m.Registry.Exists("subscribers") then
-		m.CurrentSubscribers = ParseJson(m.Registry.Read("subscribers")) 
-		if m.CurrentSubscribers = invalid then
-			m.CurrentSubscribers = {active:[]}
-		end if
-		print "Current Subscribers found"
-	else
-		m.CurrentSubscribers = {active:[]}
-		m.Registry.Write("subscribers", FormatJson({active:[]}))
-	end if
-
-	if m.Registry.Exists("lastvolume") then
-		print "Last Volume found"
-	else
-		print "Last Volume not found"
-		m.Registry.Write("lastvolume", "100")
-	end if
 
 	if m.Registry.Exists("muted") then
 		if m.Registry.Read("muted") = "true" then
-			for each zone in m.bsp.sign.zonesHSM
-				if type(zone) = "roAssociativeArray" then
-					if type(zone.videoPlayer) = "roVideoPlayer" then
-						m.SetVolSingleZone("0", zone)
-					end if
-				end if
-				if type(zone) = "roAssociativeArray" then
-					if type(zone.audioPlayer) = "roAudioPlayer" then
-						m.SetVolSingleZone("0", zone)
-					end if
-				end if
-			end for
+			m.SetMuteConnector(m, "0")
+			m.SetVolConnector(m, m.Registry.Read("volume"))
 		else
-			for each zone in m.bsp.sign.zonesHSM
-				if type(zone) = "roAssociativeArray" then
-					if type(zone.videoPlayer) = "roVideoPlayer" then
-						m.SetVolSingleZone(m.Registry.Read("currentvolume"), zone)
-					end if
-				end if
-				if type(zone) = "roAssociativeArray" then
-					if type(zone.audioPlayer) = "roAudioPlayer" then
-						m.SetVolSingleZone(m.Registry.Read("currentvolume"), zone)
-					end if
-				end if
-			end for
+			m.SetVolConnector(m, m.Registry.Read("volume"))
 		end if
 	else
 		print "No Registry Data"
 		m.Registry.Write("muted", "false")
-		m.Registry.Write("currentvolume", "100")
-		m.Registry.Write("lastvolume", "100")
+		m.Registry.Write("volume", "100")
 		m.Registry.Write("powersave", "false")
 		m.Registry.Write("playing", "true")
 
@@ -324,17 +289,17 @@ end sub
 
 sub AddStatusUrls()
 	m.GetStatusinfoAA = { HandleEvent: m.GetStatusinfo, mVar: m }
-	m.GetPlaybackZoneAA = { HandleEvent: m.PlaybackZone, mVar: m }
-	m.GetMuteZoneAA = { HandleEvent: m.MuteZone, mVar: m }
-	m.SetVolZoneAA = { HandleEvent: m.SetVolZone, mVar: m }
+	m.SetPlaybackZoneAA = { HandleEvent: m.PlaybackZone, mVar: m }
+	m.SetMuteConnectorAA = { HandleEvent: m.SetMuteConnectorHandler, mVar: m }
+	m.SetVolConnectorAA = { HandleEvent: m.SetVolConnectorHandler, mVar: m }
 	m.RebootPlayerAA = { HandleEvent: m.RebootPlayer, mVar: m }
 	m.DefaultsPlayerAA = { HandleEvent: m.DefaultsPlayer, mVar: m }
 	m.SubscribeAA = { HandleEvent: m.Subscribe, mVar: m }
 	m.UnsubscribeAA = { HandleEvent: m.Unsubscribe, mVar: m }
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/status", user_data: m.GetStatusinfoAA })
-	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/playback", user_data: m.GetPlaybackZoneAA })
-	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/mute", user_data: m.GetMuteZoneAA })
-	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/volume", user_data: m.SetVolZoneAA })
+	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/playback", user_data: m.SetPlaybackZoneAA })
+	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/mute", user_data: m.SetMuteConnectorAA })
+	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/volume", user_data: m.SetVolConnectorAA })
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/reboot", user_data: m.RebootPlayerAA })
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/default", user_data: m.DefaultsPlayerAA })
 	m.pluginLocalWebServer.AddGetFromEvent({ url_path: "/subscribe", user_data: m.SubscribeAA })
@@ -359,8 +324,7 @@ end function
 function DefaultsPlayer(userData as object, e as object) as boolean
 	mVar = userData.mVar
 	mVar.Registry.Write("muted", "false")
-	mVar.Registry.Write("currentvolume", "100")
-	mVar.Registry.Write("lastvolume", "100")
+	mVar.Registry.Write("volume", "100")
 	mVar.Registry.Write("powersave", "false")
 	mVar.Registry.Write("playing", "true")
 	mVar.Registry.Write("subscribers", "{'active':[]}")
@@ -421,8 +385,7 @@ function PlaybackZone(userData as object, e as object) as boolean
 					mVar.Registry.Write("powersave", "true")
 					for each zone in mVar.bsp.sign.zonesHSM
 						if type(zone) = "roAssociativeArray" then
-							mVar.Registry.Write("lastvolume", mVar.Registry.Read("currentvolume"))
-							mVar.SetVolSingleZone("0", zone)
+							mVar.SetVolConnector(mVar, "0")
 							if zone.videoplayer <> invalid then 
 								mVar.PlaybackSingleZone("pause", zone)
 								mVar.Registry.Write("playing", "false")
@@ -438,7 +401,6 @@ function PlaybackZone(userData as object, e as object) as boolean
 					mVar.Registry.Write("powersave", "false")
 					for each zone in mVar.bsp.sign.zonesHSM
 						if type(zone) = "roAssociativeArray" then
-							mVar.SetVolSingleZone( mVar.Registry.Read("lastvolume"), zone)
 							if zone.videoplayer <> invalid then 
 								mVar.PlaybackSingleZone("play", zone)
 								mVar.Registry.Write("playing", "true")
@@ -470,89 +432,77 @@ function SleepSingleZone(state as object, videoMode as object) as boolean
 	end if
 end function
 
-function SetVolSingleZone(volume as string, zone as object) as boolean
+
+function SetVolConnector(userData as object, volume as string) as boolean
+	mVar = userData.mVar
+	volParams = {}
 	print "Volume: ";(volume.ToInt())
-	zone.videoPlayer.SetVolume(volume.ToInt())
-	for i% = 0 to 5
-		zone.videoChannelVolumes[i%] = volume.ToInt()
-		m.Registry.Write("currentvolume", volume)
-	end for
+	if type(m.bsp.AudioConnectors) = "roArray" then
+		for each connector in m.bsp.AudioConnectors
+			connector$ = connector
+			volume% = int(val(volume))
+			if lcase(connector$) = "analog" or lcase(connector$) = "analog1" then
+				m.bsp.analogVolume% = ExecuteChangeConnectorVolume("Analog:1", volume%, m.bsp.sign.audio1MinVolume%, m.bsp.sign.audio1MaxVolume%)
+			else if lcase(connector$) = "hdmi" then
+				m.bsp.hdmiVolume% = ExecuteChangeConnectorVolume("HDMI", volume%, m.bsp.sign.hdmiMinVolume%, m.bsp.sign.hdmiMaxVolume%)
+			else if lcase(connector$) = "hdmi1" then
+				m.bsp.hdmi1Volume% = ExecuteChangeConnectorVolume("HDMI:1", volume%, m.bsp.sign.hdmi1MinVolume%, m.bsp.sign.hdmi1MaxVolume%)
+			else if lcase(connector$) = "hdmi2" then
+				m.bsp.hdmi2Volume% = ExecuteChangeConnectorVolume("HDMI:2", volume%, m.bsp.sign.hdmi2MinVolume%, m.bsp.sign.hdmi2MaxVolume%)
+			else if lcase(connector$) = "hdmi3" then
+				m.bsp.hdmi3Volume% = ExecuteChangeConnectorVolume("HDMI:3", volume%, m.bsp.sign.hdmi3MinVolume%, m.bsp.sign.hdmi3MaxVolume%)
+			else if lcase(connector$) = "hdmi4" then
+				m.bsp.hdmi4Volume% = ExecuteChangeConnectorVolume("HDMI:4", volume%, m.bsp.sign.hdmi4MinVolume%, m.bsp.sign.hdmi4MaxVolume%)
+			else if lcase(connector$) = "spdif" then
+				m.bsp.spdifVolume% = ExecuteChangeConnectorVolume("SPDIF", volume%, m.bsp.sign.spdifMinVolume%, m.bsp.sign.spdifMaxVolume%)
+			end if
+		end for
+	end if
+	m.Registry.Write("volume", volume)
 	m.Registry.Flush()
 end function
 
-function SetVolZone(userData as object, e as object) as boolean
-	mVar = userData.mVar
-	for each keys in args
-		for each zone in mVar.bsp.sign.zonesHSM
-			if type(zone) = "roAssociativeArray" then
-				if mVar.Registry.Read("muted") = "true" then
-					if mVar.Registry.Read("powersave") = "false" then
-						mVar.Registry.Write("lastvolume", volume)
-					else
-						mVar.SetVolSingleZone(keys, zone)
-					end if
-				else
-					mVar.SetVolSingleZone(keys, zone)
-				end if
-			end if
-		end for
-	end for
-	e.SetResponseBodyString("Muted")
-	e.SendResponse(200)
-end function
-
-function MuteZone(userData as object, e as object) as boolean
+function SetVolConnectorHandler(userData as object, e as object) as boolean
 	mVar = userData.mVar
 	args = e.GetRequestParams()
 	for each keys in args
-		if lcase(keys) = "mute" then
-			for each zone in mVar.bsp.sign.zonesHSM
-				if type(zone) = "roAssociativeArray" then
-					if type(zone.videoPlayer) = "roVideoPlayer" then
-						if mVar.Registry.Read("muted") <> "true" then
-							mVar.Registry.Write("lastvolume", zone.videoChannelVolumes[0].tostr())
-							mVar.SetVolSingleZone("0", zone)
-							mVar.Registry.Write("muted", "true")
-						end if
-					end if
-					if type(zone.audioPlayer) = "roAudioPlayer" then
-						if mVar.Registry.Read("muted") <> "true" then
-							mVar.Registry.Write("lastvolume", zone.audioChannelVolumes[0].tostr())
-							mVar.SetVolSingleZone("0", zone)
-							mVar.Registry.Write("muted", "true")
-						end if
-					end if
-				end if
-			end for
-			e.SetResponseBodyString("Muted")
-			e.SendResponse(200)
-			mVar.Registry.Flush()
-		else if lcase(keys) = "unmute" then
-			for each zone in mVar.bsp.sign.zonesHSM
-				if type(zone) = "roAssociativeArray" then
-					if type(zone.videoPlayer) = "roVideoPlayer" then
-						if mVar.Registry.Read("muted") <> "false" then
-							mVar.SetVolSingleZone(mVar.Registry.Read("lastvolume"), zone)
-							mVar.Registry.Write("muted", "false") 
-						end if
-					end if
-					if type(zone.audioPlayer) = "roAudioPlayer" then
-						if mVar.Registry.Read("muted") <> "false" then
-							mVar.SetVolSingleZone(mVar.Registry.Read("lastvolume"), zone)
-							mVar.Registry.Write("muted", "false") 
-						end if
-					end if
-				end if
-			end for
-			e.SetResponseBodyString("Unmuted")
-			e.SendResponse(200)
-			mVar.Registry.Flush()
-		else
-			e.SetResponseBodyString("Blank")
-			e.SendResponse(200)
-		end if
+		mVar.SetVolConnector(userData, keys)
 	end for
-	e.SetResponseBodyString("Blank")
+	e.SetResponseBodyString("Set Volume!")
+	e.SendResponse(200)
+end function
+
+function SetMuteConnector(userData as object, mute as string) as boolean
+	mVar = userData.mVar
+	muteBool = false
+	muteStr = "false"
+	volParams = {}
+
+	if mute = "mute" then
+		muteBool = true
+		muteStr = "true"
+	else
+		muteBool = false
+		muteStr = "false"
+	end if
+	
+
+	for each connectors in m.bsp.AudioConnectors
+		volParams.connector = connectors
+		m.bsp.MuteAudioOutputs(muteBool, volParams)
+	end for
+	m.Registry.Write("muted", muteStr)
+	m.Registry.Flush()
+end function
+
+function SetMuteConnectorHandler(userData as object, e as object) as boolean
+	mVar = userData.mVar
+	args = e.GetRequestParams()
+
+	for each keys in args
+		mVar.SetMuteConnector(userData, keys)
+	end for
+	e.SetResponseBodyString("Set Mute!")
 	e.SendResponse(200)
 end function
 
@@ -565,7 +515,7 @@ function GetStatusinfo(userData as object, e as object) as boolean
 	out.AddReplace("playing", mVar.Registry.Read("playing"))
 	out.AddReplace("sleep", mVar.Registry.Read("powersave"))
 	out.AddReplace("videomode", mVar.bsp.sign.videomode$)
-	out.AddReplace("volume", mVar.Registry.Read("currentvolume"))
+	out.AddReplace("volume", mVar.Registry.Read("volume"))
 	out.AddReplace("muted", mVar.Registry.Read("muted"))
 	playlistTemp = []
 	if mVar.bsp.getvideozone(0) <> invalid then
@@ -575,7 +525,7 @@ function GetStatusinfo(userData as object, e as object) as boolean
 		out.AddReplace("playlist", playlistTemp)
 	end if
 	if mVar.CurrentSubscribers <> invalid then
-		out.AddReplace("currentSubscribers", mVar.CurrentSubscribers.active) 
+		out.AddReplace("currentSubscribers", mVar.CurrentSubscribers) 
 	end if
 	if mVar.bsp.activePresentation <> invalid then
 		out.AddReplace("activePresentation", mVar.bsp.activePresentation$) 
@@ -609,11 +559,11 @@ function Subscribe(userData as object, e as object) as boolean
 		print "full: ";tempfull
 
 		if mVar.CurrentSubscribers <> invalid then
-			n = mVar.CurrentSubscribers.active.Count()
+			n = mVar.CurrentSubscribers.Count()
 			i = 0
 			while (i < n)
-				print "active: "; mVar.CurrentSubscribers.active[i]
-				if mVar.CurrentSubscribers.active[i] = tempfull then
+				print "active: "; mVar.CurrentSubscribers[i]
+				if mVar.CurrentSubscribers[i] = tempfull then
 					e.SetResponseBodyString("Already Subscribed!")
 					e.SendResponse(200)
 					return false
@@ -622,8 +572,7 @@ function Subscribe(userData as object, e as object) as boolean
 			end while
 		end if
 		
-		mVar.CurrentSubscribers.active.push(tempfull)
-		mVar.Registry.Write("subscribers", FormatJson(mVar.CurrentSubscribers))
+		mVar.CurrentSubscribers.push(tempfull)
 		print "final json: ";FormatJson(mVar.CurrentSubscribers)
 
 		e.SetResponseBodyString("Added!")
@@ -657,12 +606,12 @@ function Unsubscribe(userData as object, e as object) as boolean
 		print "full: ";tempfull
 
 		if mVar.CurrentSubscribers <> invalid then
-			n = mVar.CurrentSubscribers.active.Count()
+			n = mVar.CurrentSubscribers.Count()
 			i = 0
 			while (i < n)
-				print "active: "; mVar.CurrentSubscribers.active[i]
-				if mVar.CurrentSubscribers.active[i] = tempfull then
-					mVar.CurrentSubscribers.active.Delete(i)
+				print "active: "; mVar.CurrentSubscribers[i]
+				if mVar.CurrentSubscribers[i] = tempfull then
+					mVar.CurrentSubscribers.Delete(i)
 					e.SetResponseBodyString("Unsubscribed!")
 					e.SendResponse(200)
 					return true

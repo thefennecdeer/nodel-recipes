@@ -85,10 +85,10 @@ local_event_UDPListenPort = LocalEvent({'group': 'Networking','order': next_seq(
 def Power(arg):
   if arg == "On":
     lookup_local_event('DesiredPower').emit("On")
-    sendGet("/playback?sleep=false")
+    send_get("/playback?sleep=false")
   elif arg == "Off":
     lookup_local_event('DesiredPower').emit("Off")
-    sendGet("/playback?sleep=true")
+    send_get("/playback?sleep=true")
 
 @local_action({'group': 'Power', 'title': 'On', 'order': next_seq()})  
 def Wake(arg = None):
@@ -103,12 +103,12 @@ def Sleep(arg = None):
 @local_action({'group': 'Playback', 'title': 'Play', 'order': 1})  
 def Play(arg = None):
   lookup_local_event('DesiredPlayback').emit("Playing")
-  sendGet("/playback?playback=play")
+  send_get("/playback?playback=play")
 
 @local_action({'group': 'Playback', 'title': 'Pause', 'order': 2})  
 def Pause(arg = None):
   lookup_local_event('DesiredPlayback').emit("Paused")
-  sendGet("/playback?playback=pause")
+  send_get("/playback?playback=pause")
 # Playback/>
 
 # <Volume
@@ -117,22 +117,22 @@ def Volume(arg):
     if arg == None or arg < 0 or arg > 100:
       console.warn('Volume: no arg or outside 0 - 100')
       return
-    sendGet("/volume?%s" % arg)
+    send_get("/volume?%s" % arg)
 
 @local_action({'group': 'Power', 'title': 'Reboot', 'order': next_seq()})  
 def Reboot(arg = None):
   console.log("Sending Reboot")
-  sendGet("/reboot?reboot=true")
+  send_get("/reboot?reboot=true")
 
 @local_action({'group': 'Volume', 'title': 'Mute', 'order': next_seq(), 'schema': {'type': 'string', 'enum': ['On', 'Off']}})  
 def Mute(arg):
   if arg == "On":
     local_event_DesiredMute.emit("On")
-    sendGet("/mute?mute")
+    send_get("/mute?mute")
 
   elif arg == "Off":
     local_event_DesiredMute.emit("Off")
-    sendGet("/mute?unmute")
+    send_get("/mute?unmute")
 
 @local_action({'group': 'Volume', 'title': 'Mute On', 'order': next_seq()})
 def MuteOn():
@@ -145,7 +145,7 @@ def MuteOff():
 
 @local_action({'group': 'Status', 'title': 'Get Status', 'order': next_seq()})
 def GetStatus():
-  playerStatusGet()
+  player_status_get()
 
 ### -------------------- MAIN FUNCTIONS -------------------- ###
   
@@ -171,15 +171,11 @@ def emit_custom_event(json):
     event.emit()
   
 
-def send_udp_string(msg):
-  console.info('Sent: %s' % msg)
-  transmit.emit(msg)
-
-def sendGet(value):
+def send_get(value):
   global fullAddress
   try: 
     resp = get_url(fullAddress + value, fullResponse=True)
-    playerStatusGet()
+    player_status_get()
   except: 
     console.error("Failed to Connect")
   else:
@@ -200,7 +196,7 @@ def send_udp_string(msg):
     if sock:
       sock.close()
       
-def playerStatusGet():
+def player_status_get():
   global fullAddress
   try:
     resp = get_url(fullAddress + "/status", method='GET', contentType='application/json', fullResponse=True)
@@ -255,15 +251,15 @@ def playerStatusGet():
 def subscribe():
   global udpListenPort, udpListenAddress, udpListenReady
   if udpListenReady:
-    sendGet("/subscribe?address=%s&port=%s" % (udpListenAddress, udpListenPort))
+    send_get("/subscribe?address=%s&port=%s" % (udpListenAddress, udpListenPort))
 
 def udp_ready():
   global udpListenReady
   udpListenReady = True
-  grabUDPListenDetails()
+  grab_UDP_listen_details()
   subscribe()
 
-def grabUDPListenDetails():
+def grab_UDP_listen_details():
   global udpListenPort
   udpListenPort = str(udp.getListeningPort())
   lookup_local_event("UDPListenPort").emit(udpListenPort)
@@ -325,7 +321,7 @@ local_event_Status = LocalEvent({'group': 'Status', 'order': 99999+next_seq(), '
         'level': {'type': 'integer', 'order': 1},
         'message': {'type': 'string', 'order': 2}}}})
   
-def nodeStatusCheck():
+def node_status_check():
   diff = (system_clock() - _lastReceive)/1000.0 # (in secs)
   now = date_now()
   
@@ -358,8 +354,8 @@ def nodeStatusCheck():
 
 # --->
 
-playerStatus_timer = Timer(playerStatusGet, status_check_interval)
-nodeStatus_timer = Timer(nodeStatusCheck, status_check_interval)
+playerStatus_timer = Timer(player_status_get, status_check_interval)
+nodeStatus_timer = Timer(node_status_check, status_check_interval)
 
 # <!-- logging
 

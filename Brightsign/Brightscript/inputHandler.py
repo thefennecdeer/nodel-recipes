@@ -4,7 +4,7 @@ from nodetoolkit import *
 def initGPIOButtons():
     def init(i):
         create_local_event('GPIO%s' % i, {'group': 'GPIO', 'order': next_seq(), 'schema': {'type': 'boolean'}}) 
-    [init(i) for i in [1, 2, 3, 4, 5, 6, 7]]
+    [init(i) for i in [0, 1, 2, 3, 4, 5, 6, 7]]
 
 def handlePress(json):
     lookup_local_event('GPIO%s' % json["gpio"]).emit(str2bool(json["event"]))
