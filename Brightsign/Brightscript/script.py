@@ -1,5 +1,5 @@
 '''
-**Brightsign Node** <sup>v2.1</sup> 
+**Brightsign Node** <sup>v2.1.1</sup> 
 
 Requires the [Nodel Brightsign Plugin](https://github.com/museumsvictoria/nodel-recipes/tree/master/Brightsign)
 
@@ -195,6 +195,10 @@ def send_udp_string(msg):
   finally:
     if sock:
       sock.close()
+
+def subscribe_status(list):
+  if ("%s:%s" % (udpListenAddress, udpListenPort)) not in list:
+    subscribe()  
       
 def player_status_get():
   global fullAddress
@@ -214,6 +218,8 @@ def player_status_get():
       lookup_local_event('Serial').emit(status_decode['serialNumber'])
       lookup_local_event('VideoMode').emit(status_decode['videomode'])
       lookup_local_event('volume').emit(status_decode['volume'])
+
+      subscribe_status(status_decode['currentSubscribers'])
 
       if status_decode['playlist'] == "true":
         playlist = list()
@@ -285,8 +291,8 @@ def main(arg = None):
   scriptPort = (playerOverrides or {}).get('scriptPort') or scriptPort
   udpPort = (playerOverrides or {}).get('udpPort') or udpPort
 
-  udpListenAddress = (playerOverrides or {}).get('ipAddress') or udpListenAddress
-  udpListenPort = (playerOverrides or {}).get('udpPort') or udpListenPort
+  udpListenAddress = (nodeOverrides or {}).get('ipAddress') or udpListenAddress
+  udpListenPort = (nodeOverrides or {}).get('udpPort') or udpListenPort
 
   fullAddress = "http://%s:%s" % (ipAddress, scriptPort)
 
