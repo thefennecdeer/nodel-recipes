@@ -41,7 +41,7 @@ function newNodel(msgPort as object, userVariables as object, bsp as object)
 	s.LoadRegistry = LoadRegistry
 
 	s.SendUDPMessage = SendUDPMessage
-	s.AudioConnectors = ["analog", "hdmi", "hdmi1", "hdmi2", "hdmi3", "hdmi4", "spdif"]
+	s.AudioConnectors = ["ANALOG:1", "HDMI", "HDMI:1", "HDMI:2", "HDMI:3", "HDMI:4", "SPIDF"]
 
 	s.Registry = CreateObject("roRegistrySection", "Nodel")
 	
@@ -264,6 +264,7 @@ sub LoadRegistry()
 
 	if m.Registry.Exists("volume") then
 		print "Volume found"
+		m.SetVolConnector(m, m.Registry.Read("volume"))
 	else
 		m.Registry.Write("volume", "100")
 	end if
@@ -271,10 +272,9 @@ sub LoadRegistry()
 
 	if m.Registry.Exists("muted") then
 		if m.Registry.Read("muted") = "true" then
-			m.SetMuteConnector(m, "0")
-			m.SetVolConnector(m, m.Registry.Read("volume"))
+			m.SetMuteConnector(m, "false")
 		else
-			m.SetVolConnector(m, m.Registry.Read("volume"))
+			m.Registry.Write("muted", "false")
 		end if
 	else
 		print "No Registry Data"
@@ -437,27 +437,25 @@ function SetVolConnector(userData as object, volume as string) as boolean
 	mVar = userData.mVar
 	volParams = {}
 	print "Volume: ";(volume.ToInt())
-	if type(m.bsp.AudioConnectors) = "roArray" then
-		for each connector in m.bsp.AudioConnectors
-			connector$ = connector
-			volume% = int(val(volume))
-			if lcase(connector$) = "analog" or lcase(connector$) = "analog1" then
-				m.bsp.analogVolume% = ExecuteChangeConnectorVolume("Analog:1", volume%, m.bsp.sign.audio1MinVolume%, m.bsp.sign.audio1MaxVolume%)
-			else if lcase(connector$) = "hdmi" then
-				m.bsp.hdmiVolume% = ExecuteChangeConnectorVolume("HDMI", volume%, m.bsp.sign.hdmiMinVolume%, m.bsp.sign.hdmiMaxVolume%)
-			else if lcase(connector$) = "hdmi1" then
-				m.bsp.hdmi1Volume% = ExecuteChangeConnectorVolume("HDMI:1", volume%, m.bsp.sign.hdmi1MinVolume%, m.bsp.sign.hdmi1MaxVolume%)
-			else if lcase(connector$) = "hdmi2" then
-				m.bsp.hdmi2Volume% = ExecuteChangeConnectorVolume("HDMI:2", volume%, m.bsp.sign.hdmi2MinVolume%, m.bsp.sign.hdmi2MaxVolume%)
-			else if lcase(connector$) = "hdmi3" then
-				m.bsp.hdmi3Volume% = ExecuteChangeConnectorVolume("HDMI:3", volume%, m.bsp.sign.hdmi3MinVolume%, m.bsp.sign.hdmi3MaxVolume%)
-			else if lcase(connector$) = "hdmi4" then
-				m.bsp.hdmi4Volume% = ExecuteChangeConnectorVolume("HDMI:4", volume%, m.bsp.sign.hdmi4MinVolume%, m.bsp.sign.hdmi4MaxVolume%)
-			else if lcase(connector$) = "spdif" then
-				m.bsp.spdifVolume% = ExecuteChangeConnectorVolume("SPDIF", volume%, m.bsp.sign.spdifMinVolume%, m.bsp.sign.spdifMaxVolume%)
+	for each zone in m.bsp.sign.zonesHSM
+		print "zone: ";zone.videoPlayer
+		print "zone type: ";type(zone.videoPlayer)
+		if type(zone) = "roAssociativeArray" then
+			if type(zone.videoPlayer) = "roVideoPlayer" then
+			  zone.videoPlayer.SetVolume(volume.ToInt())
+			  for i% = 0 to 5
+				zone.videoChannelVolumes[i%] = volume.ToInt()
+			  next
 			end if
-		end for
-	end if
+			if IsAudioPlayer(zone.audioPlayer) then
+			  zone.audioPlayer.SetVolume(volume.ToInt())
+			  for i% = 0 to 5
+				zone.audioChannelVolumes[i%] = volume.ToInt()
+			  next
+			end if
+		  end if
+	end for
+	  
 	m.Registry.Write("volume", volume)
 	m.Registry.Flush()
 end function
@@ -487,13 +485,17 @@ function SetMuteConnector(userData as object, mute as string) as boolean
 	end if
 	
 
-	for each connectors in m.bsp.AudioConnectors
-		volParams.connector = connectors
-		m.bsp.MuteAudioOutputs(muteBool, volParams)
+	for each connectors in m.AudioConnectors
+		audioOutput = CreateObject("roAudioOutput", GetAudioOutputConnector(connectors))
+      	if type(audioOutput) = "roAudioOutput" then
+        	audioOutput.SetMute(muteBool)
+      	end if
 	end for
 	m.Registry.Write("muted", muteStr)
 	m.Registry.Flush()
 end function
+
+
 
 function SetMuteConnectorHandler(userData as object, e as object) as boolean
 	mVar = userData.mVar
