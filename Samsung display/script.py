@@ -5,6 +5,7 @@
 
 Remember to adjust **Network Standby Control** to **On**.
 
+  * r14: pull model name
   * r13: can suppress warnings, always log warning changes in console
   * r12: "Treat no signal as fault?" parameter
   * r11: BUGFIX random faults sometimes incorrectly generated on old displays when Powered Off (e.g. Lamp Fault)
