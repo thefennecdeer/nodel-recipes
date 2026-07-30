@@ -1,7 +1,7 @@
 '''
 **Samsung display** recipe, serial or TCP.
 
-`REV 13.2607`
+`REV 14.3007`
 
 Remember to adjust **Network Standby Control** to **On**.
 
@@ -618,6 +618,20 @@ def getSerialNumber(arg):
   queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: serialNumberEvent.emit(resp[6:-4])))
   
 Action('GetSerialNumber', getSerialNumber, {'title': 'Get', 'group': 'Serial Number'})
+
+# <!-- get Model Name
+
+@local_action({'group': 'Model Name', 'title': 'Get', 'order': next_seq()})
+def getModelName():
+  log(1, 'getModelName')
+  
+  msg = '\x8a%s\x00' % chr(int(param_id))
+  checksum = sum([ord(c) for c in msg]) & 0xff
+  queue.request(lambda: tcp.send('\xaa%s%s' % (msg, chr(checksum))), lambda resp: checkHeader(resp, lambda: local_event_ModelName.emit(resp[6:-1])))
+  
+local_event_ModelName = LocalEvent({'group': 'Model Name', 'schema': {'type': 'string'}, 'order': next_seq()})
+
+# get Model Name -->
 
 softwareVersionEvent = Event('Software Version', {'group': 'Software Version', 'schema': {'type': 'string'}})
 
